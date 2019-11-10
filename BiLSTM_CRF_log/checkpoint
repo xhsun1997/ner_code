@@ -1,2 +1,0 @@
-model_checkpoint_path: "BiLSTM_CRF_model.ckpt"
-all_model_checkpoint_paths: "BiLSTM_CRF_model.ckpt"

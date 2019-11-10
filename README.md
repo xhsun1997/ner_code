@@ -15,3 +15,10 @@
 利用HMM模型可以简单的测试两个句子如下图所示
 
 ![result.png](https://i.loli.net/2019/11/10/3Upsy2wbRNLtxmD.png)  ![result_1.png](https://i.loli.net/2019/11/10/xGzucS84VONg2ZL.png)
+
+参考论文:
+
+1. End-to-end Sequence Labeling via Bi-directional LSTM-CNNs-CRF
+2. Named Entity Recognition with Bidirectional LSTM-CNNs
+3. Neural Architecture for Name Entity Recognition
+4. Bidirectional LSTM-CRF Models for Sequence Tagging
