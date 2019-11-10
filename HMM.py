@@ -206,12 +206,13 @@ if __name__ == "__main__":
     print("Testing the model is over!")
 
     
-    with open(".model_results/HMM_results.txt","w") as f:
+    with open("./model_results/HMM_results.txt","w") as f:
         f.write("tag name"+"\t"+"precision_score"+"\t"+"recall_score"+"\t"+"f1_score"+"\n")
         for tag in tag2id:
             f.write(tag+"\t"+"  "+str(round(precision_score[tag],3))+"\t"+"\t"+str(round(recall_score[tag],3))+"\t"+"\t"+"  "+str(round(f1_score[tag],3))+"\n")
     
-    text="China has many action superstars like Bruce Lee and Jet Lee"
+    text="Bruce Lee is my favorite star, he borned in Hong Kong and lived in American"
+    #text_2="Jet Li is also my idol, and he once played in France."
     predict_path=model.viterbi_decode(text)
     text_list=text.strip().split()
     assert len(predict_path)==len(text_list)
