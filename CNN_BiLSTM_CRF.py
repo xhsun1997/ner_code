@@ -212,18 +212,6 @@ class CNN_BiLSTM_CRF:
             f1_score=cal_f1(self.tag2id,precision_score,recall_score)
 
             print_scores(tag2id, precision_score, recall_score, f1_score, golden_tags_counter)
-        import pickle
-        if self.use_CRF:
-            with open("./CNN_BiLSTM_CRF.pkl","wb") as f:
-                pickle.dump(precision_score,f)
-                pickle.dump(recall_score,f)
-                pickle.dump(f1_score,f)
-        else:
-            with open('./CNN_BiLSTM.pkl','wb') as f:
-                pickle.dump(precision_score,f)
-                pickle.dump(recall_score,f)
-                pickle.dump(f1_score,f)
-        print("Has save results with pickle!")
         return precision_score,recall_score,f1_score
         
                     
@@ -249,12 +237,12 @@ def batch_yield_(pad_all_sentence_id, pad_all_sentence_tag_id, actual_length_lis
 
 
 if __name__ == "__main__":
-    file_path = r'D:\Name_Entity_Recogination_Review\运行文件\data\train.txt'
-    glove_path = r'D:\Name_Entity_Recogination_Review\运行文件\data\glove.6B.100d.txt'
-    test_file_path = r'D:\Name_Entity_Recogination_Review\运行文件\data\test.txt'
-    dev_file_path=r'D:\Name_Entity_Recogination_Review\运行文件\data\dev.txt'
+    file_path = "./data/train.txt"
+    glove_path = "./data/glove.6B.100d.txt"
+    test_file_path = "./data/test.txt"
+    dev_file_path="./data/dev.txt"
     config = {}
-    config['epoches']=50
+    config['epoches']=30
     config['batch_size'] = 64
     config['hidden_dim'] = 200
     config['max_seq_length'] = 170
@@ -292,10 +280,10 @@ if __name__ == "__main__":
     padded_char_matrix_test=pad_charsentence_id(all_charsentence_id_test,config['max_seq_length'],config['max_word_length'])
     
     precision_score,recall_score,f1_score=model.test(pad_all_sentence_id_test,pad_all_sentence_tag_id_test,actual_length_list_test,padded_char_matrix_test)
-    with open("./CNN_BiLSTM_CRF_results.txt","w",encoding="utf-8") as f:
+    with open(".model_results/CNN_BiLSTM_CRF_results.txt","w",encoding="utf-8") as f:
         f.write("tag name"+"\t"+"precision_score"+"\t"+"recall_score"+"\t"+"f1_score"+"\n")
         for tag in tag2id:
-            f.write(tag+"\t"+str(precision_score[tag])+"\t"+str(recall_score[tag])+"\t"+str(f1_score)+"\n")
+            f.write(tag+"\t"+"  "+str(round(precision_score[tag],3))+"\t"+"\t"+str(round(recall_score[tag],3))+"\t"+"\t"+"  "+str(round(f1_score[tag],3))+"\n")
             
             
     model=CNN_BiLSTM_CRF(word_embedding,char_embedding_matrix,tag2id,config,use_CRF=False)
@@ -309,8 +297,8 @@ if __name__ == "__main__":
     padded_char_matrix_test=pad_charsentence_id(all_charsentence_id_test,config['max_seq_length'],config['max_word_length'])
     
     precision_score,recall_score,f1_score=model.test(pad_all_sentence_id_test,pad_all_sentence_tag_id_test,actual_length_list_test,padded_char_matrix_test)
-    with open("./CNN_BiLSTM_results.txt","w",encoding="utf-8") as f:
+    with open(".model_results/CNN_BiLSTM_results.txt","w",encoding="utf-8") as f:
         f.write("tag name"+"\t"+"precision_score"+"\t"+"recall_score"+"\t"+"f1_score"+"\n")
         for tag in tag2id:
-            f.write(tag+"\t"+str(precision_score[tag])+"\t"+str(recall_score[tag])+"\t"+str(f1_score)+"\n")
+            f.write(tag+"\t"+"  "+str(round(precision_score[tag],3))+"\t"+"\t"+str(round(recall_score[tag],3))+"\t"+"\t"+"  "+str(round(f1_score[tag],3))+"\n")
     print("It's over!!!!!")
