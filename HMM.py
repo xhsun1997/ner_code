@@ -1,5 +1,6 @@
 import os
 import numpy as np
+from process_data import *
 
 def read_train_corpus(path):
     with open(path,'r',encoding='utf-8') as f:
@@ -39,6 +40,7 @@ def get_word_tag_2id(sentences):
     sort_list=sorted(count_words.items(),key=operator.itemgetter(1),reverse=True)
     for word,freq in sort_list:
         word2id[word]=len(word2id)
+    word2id['unk']=len(word2id)
     return word2id,tag2id
 
 class HMM:
@@ -51,6 +53,10 @@ class HMM:
         self.pi=np.zeros(shape=[self.state_nums])
         self.A=np.zeros(shape=[self.state_nums,self.state_nums])
         self.B=np.zeros(shape=[self.state_nums,self.all_observation_nums])
+        self.correct_dict={}
+        self.golden_tags_idlist=[]
+        self.predict_tags_idlist=[]
+        self.id2tag={id_:tag_ for tag_,id_ in tag2id.items()}
     
     def initial_(self):
         for each_sentence_list in self.train_data:
@@ -79,7 +85,7 @@ class HMM:
         assert sum_b.shape==(self.state_nums,1)
         self.B/=sum_b
 
-    def viterbi_decode(self,text,text_tag):
+    def viterbi_decode(self,text,text_tag=None):
         if type(text)==str:
             text_list=text.strip().split()
             assert type(text_list)==list
@@ -90,9 +96,10 @@ class HMM:
             text_list=text
             
         text_length=len(text_list)
-        assert len(text_tag)==text_length
+
         delta_arr=np.zeros(shape=[self.state_nums,text_length])
         predict_path=np.zeros(shape=delta_arr.shape,dtype=np.int32)
+        
         for i in range(self.state_nums):
             if text_list[0] in self.word2id:
                 initial_id=self.word2id[text_list[0]]
@@ -122,15 +129,28 @@ class HMM:
             last_index=predict_path[last_index][t]
             output_path.append(last_index)
         output_path.reverse()
-        correct,total=self.calculate_precision(output_path,text_tag)
+        if text_tag==None:
+            return output_path
+        correct,total=self.calculate_result(output_path,text_tag)
         return correct,total
-        
-    def calculate_precision(self,output_path,text_tag):
+    
+    
+    def calculate_result(self,output_path,text_tag):
         text_id_list=[self.tag2id[tag] for tag in text_tag]
+        assert len(output_path)==len(text_id_list)
+        self.golden_tags_idlist.append(text_id_list)
+        self.predict_tags_idlist.append(output_path)
         assert len(output_path)==len(text_id_list)
         correct_,total_=0,0
         for predict_id,tag_id in zip(output_path,text_id_list):
+            predict_tag=self.id2tag[predict_id]
+            golden_tag=self.id2tag[tag_id]
             if predict_id==tag_id:
+                assert golden_tag==predict_tag
+                if golden_tag not in self.correct_dict:
+                    self.correct_dict[golden_tag]=1
+                else:
+                    self.correct_dict[golden_tag]+=1#correct_tag 记录的是每一个被正确预测的标签所出现的测数
                 correct_+=1
             total_+=1
         return correct_,total_
@@ -171,4 +191,36 @@ if __name__ == "__main__":
     print(correct_predict)
     print(total_amount)
     print(correct_predict/total_amount)
+    
+    golden_tags_idlist=flatten_list(model.golden_tags_idlist)
+    predict_tags_idlist=flatten_list(model.predict_tags_idlist)
+    correct_dict=model.correct_dict
+    assert len(golden_tags_idlist)==len(predict_tags_idlist)
+    from collections import Counter
+    golden_tags_idlist_counter=Counter(golden_tags_idlist)#记录的是每一个真实标签应该出现的次数
+    predict_tags_idlist_counter=Counter(predict_tags_idlist)#每一个预测的标签出现的次数
+    precision_score=cal_precision(tag2id,correct_dict,predict_tags_idlist_counter)
+    recall_score=cal_recall(tag2id,correct_dict,golden_tags_idlist_counter)
+    f1_score=cal_f1(tag2id,precision_score,recall_score)
+    print_scores(tag2id,precision_score,recall_score,f1_score,golden_tags_idlist_counter)
+    print("Testing the model is over!")
+
+    
+    with open(".model_results/HMM_results.txt","w") as f:
+        f.write("tag name"+"\t"+"precision_score"+"\t"+"recall_score"+"\t"+"f1_score"+"\n")
+        for tag in tag2id:
+            f.write(tag+"\t"+"  "+str(round(precision_score[tag],3))+"\t"+"\t"+str(round(recall_score[tag],3))+"\t"+"\t"+"  "+str(round(f1_score[tag],3))+"\n")
+    
+    text="China has many action superstars like Bruce Lee and Jet Lee"
+    predict_path=model.viterbi_decode(text)
+    text_list=text.strip().split()
+    assert len(predict_path)==len(text_list)
+    for predict_tag_id,word in zip(predict_path,text_list):
+        predict_tag=model.id2tag[predict_tag_id]
+        print(word+"/"+predict_tag)
+
+
+
+
+    
     

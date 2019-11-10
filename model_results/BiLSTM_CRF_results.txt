@@ -1,0 +1,10 @@
+tag name	precision_score	recall_score	f1_score
+B-LOC	  0.234		0.007		  0.013
+I-MISC	  0.0		0.0		  0.0
+I-PER	  0.188		0.005		  0.01
+I-LOC	  0.0		0.0		  0.0
+I-ORG	  0.111		0.004		  0.007
+O	  0.827		0.997		  0.904
+B-ORG	  0.15		0.004		  0.007
+B-PER	  0.2		0.006		  0.011
+B-MISC	  0.071		0.001		  0.003

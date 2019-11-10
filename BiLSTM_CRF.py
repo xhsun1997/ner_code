@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-import os, argparse
+import os
 from process_data import *
 
 
@@ -21,6 +21,8 @@ class BiLSTM_CRF_Model:
         self.max_seq_length=config['max_seq_length']
         self.hidden_dim=config['hidden_dim']
         self.epoches=config['epoches']
+        self.tag2id=tag2id
+        self.model_save_path=config['model_save_path']
         tf.reset_default_graph()
 
     def placeholder_layer(self):
@@ -88,15 +90,23 @@ class BiLSTM_CRF_Model:
                     feed_dict={self.word_ids:batch_sentence_id,self.label_ids:batch_sentence_tag_id,self.seq_length:batch_actual_length}
                     _,loss_val=sess.run([self.train_op,self.loss],feed_dict=feed_dict)
                     total_loss+=loss_val
-                print("loss value is ",total_loss/num_batches)
-                saver.save(sess,r"D:\Name_Entity_Recogination_Review\运行文件\BiLSTM_Model_log\model.cpkt",global_step=epoch)
-                print("It has trained one epoch and save the model!")
+                if epoch%10==0:
+                    print("loss value is ",total_loss/num_batches)
+                    saver.save(sess,self.model_save_path)
+                    print("It has trained one epoch and save the model!")
 
     def test(self,pad_all_sentence_id_test,pad_all_sentence_tag_id_test,actual_length_list_test):
         saver=tf.train.Saver()
         correct,total=0,0
+        correct_dic={}
+        id2tag={}
+        for tag_,id_ in self.tag2id.items():
+            id2tag[id_]=tag_
+        print(id2tag)
+        golden_tags,predict_tags=[],[]
         with tf.Session(config=config_gpu) as sess:
-            saver.restore(sess,r"D:\Name_Entity_Recogination_Review\运行文件\BiLSTM_Model_log\model.cpkt-"+str(self.epoches-1))
+            saver.restore(sess,self.model_save_path)
+            print("It has restored the model")
             for word_ids_,label_ids_,seq_length_ in batch_yield(pad_all_sentence_id_test,pad_all_sentence_tag_id_test,actual_length_list_test,self.batch_size):
                 assert self.word_ids.shape==word_ids_.shape==self.label_ids.shape==label_ids_.shape
                 assert self.seq_length.shape==seq_length_.shape
@@ -111,29 +121,97 @@ class BiLSTM_CRF_Model:
                         assert len(predict_label)==len(correct_label)==self.max_seq_length
                         predict_label=predict_label[:actual_length]
                         correct_label=correct_label[:actual_length]
+                        golden_tags.append(correct_label)
+                        predict_tags.append(predict_label)
                         for pred,true in zip(predict_label,correct_label):
+                            pred_tag=id2tag[pred]
+                            true_tag=id2tag[true]
                             if pred==true:
                                 correct+=1
+                                assert pred_tag==true_tag
+                                if pred_tag not in correct_dic:
+                                    correct_dic[pred_tag]=1
+                                else:
+                                    correct_dic[pred_tag]+=1
                             total+=1
+
+                else:
+                    predict_argmax=tf.argmax(self.logits,axis=-1)
+                    predict_tensor=tf.cast(predict_argmax,dtype=tf.int32)
+                    predict_label_matrix=sess.run(predict_tensor,feed_dict)
+                    assert predict_label_matrix.shape==(self.batch_size,self.max_seq_length)
+                    for predict_label,correct_label,actual_length in zip(predict_label_matrix,label_ids_,seq_length_):
+                        assert len(predict_label)==len(correct_label)==self.max_seq_length
+                        assert len(predict_label)==len(correct_label)==self.max_seq_length
+                        predict_label=predict_label[:actual_length]
+                        correct_label=correct_label[:actual_length]
+                        golden_tags.append(correct_label)
+                        predict_tags.append(predict_label)
+                        for pred,true in zip(predict_label,correct_label):
+                            pred_tag=id2tag[pred]
+                            true_tag=id2tag[true]
+                            assert type(pred_tag)==type(true_tag)==str
+                            if pred==true:
+                                correct+=1
+                                assert pred_tag==true_tag
+                                if pred_tag not in correct_dic:
+                                    correct_dic[pred_tag]=1
+                                else:
+                                    correct_dic[pred_tag]+=1
+                            total+=1
+
             print("correct label num / total tag num is ",correct/total)
+
+            golden_tags=flatten_list(golden_tags)
+            predict_tags=flatten_list(predict_tags)
+            assert len(golden_tags)==len(predict_tags)
+            from collections import Counter
+            assert type(golden_tags)==type(predict_tags)==list
+
+            predict_tags_counter=Counter(predict_tags)
+            golden_tags_counter=Counter(golden_tags)
+            precision_score=cal_precision(self.tag2id,correct_dic,predict_tags_counter)
+            recall_score=cal_recall(self.tag2id,correct_dic,golden_tags_counter)
+            assert len(precision_score)==len(recall_score)==self.num_tags
+            f1_score=cal_f1(self.tag2id,precision_score,recall_score)
+
+            print_scores(tag2id, precision_score, recall_score, f1_score, golden_tags_counter)
             print("test the model is over!")
+        import pickle
+        if self.use_CRF:
+            with open("./BiLSTM_CRF.pkl",'wb') as f:
+                pickle.dump(precision_score,f)
+                pickle.dump(recall_score,f)
+                pickle.dump(f1_score,f)
+        else:
+            with open('./BiLSTM.pkl','wb') as f:
+                pickle.dump(precision_score,f)
+                pickle.dump(recall_score,f)
+                pickle.dump(f1_score,f)
+
+        
+        return precision_score,recall_score,f1_score
 
 
-
-
+#correct_dict是一个字典记录的是每一个标签被正确预测的次数
+#predict_tags_counter 是Counter的字典对象，记录的是预测结果中每一个标签被预测的次数
+#golden_tags_counter是真实标签中每一个标签应该出现的次数
 
 if __name__ == "__main__":
-    file_path = r'D:\Name_Entity_Recogination_Review\运行文件\data\train.txt'
-    glove_path = r'D:\Name_Entity_Recogination_Review\运行文件\data\glove.6B.100d.txt'
-    test_file_path = r'D:\Name_Entity_Recogination_Review\运行文件\data\test.txt'
-
+    file_path = "./data/train.txt"
+    glove_path = "./data/glove.6B.100d.txt"
+    test_file_path = "./data/test.txt"
+    dev_file_path="./data/dev.txt"
     config = {}
-    config['epoches']=5
+    config['epoches']=50
     config['batch_size'] = 64
-    config['hidden_dim'] = 32
-    config['max_seq_length'] = 20
-
-    all_sentence,all_sentence_tag=read_file(file_path)
+    config['hidden_dim'] = 200
+    config['max_seq_length'] = 150
+    config['model_save_path']='./BiLSTM_CRF_log/BiLSTM_CRF_model.ckpt'
+    all_sentence_train,all_sentence_tag_train=read_file(file_path)
+    dev_all_sentence,dev_all_sentence_tag=read_file(dev_file_path)
+    all_sentence=all_sentence_train+dev_all_sentence
+    all_sentence_tag=all_sentence_tag_train+dev_all_sentence_tag
     word2id, tag2id, word_embedding=get_parameter(all_sentence,all_sentence_tag,glove_path)
     all_sentence_id, all_sentence_tag_id=sentence_to_id(all_sentence,all_sentence_tag,word2id,tag2id)
     pad_all_sentence_id, pad_all_sentence_tag_id, actual_length_list=pad_sentence_id(all_sentence_id,all_sentence_tag_id,max_seq_length=config['max_seq_length'])
@@ -145,8 +223,23 @@ if __name__ == "__main__":
     model=BiLSTM_CRF_Model(word_embedding,word2id,tag2id,config,use_CRF=True)
     model.build_graph()
     model.train(pad_all_sentence_id, pad_all_sentence_tag_id, actual_length_list)
-    print("Model has trained over!")
+    print("BiLSTM_CRF Model has trained over!")
+    precision_score,recall_score,f1_score=model.test(pad_all_sentence_id_test,pad_all_sentence_tag_id_test,actual_length_list_test)
+    print("Finish model of BiLSTM_CRF")
 
-    model.test(pad_all_sentence_id_test,pad_all_sentence_tag_id_test,actual_length_list_test)
-
+    with open(".model_results/BiLSTM_CRF_results.txt","w",encoding="utf-8") as f:
+        f.write("tag name"+"\t"+"precision_score"+"\t"+"recall_score"+"\t"+"f1_score"+"\n")
+        for tag in tag2id:
+            f.write(tag+"\t"+"  "+str(round(precision_score[tag],3))+"\t"+"  "+str(round(recall_score[tag],3))+"\t"+"  "+str(round(f1_score,3))+"\n")
+    
+    model=BiLSTM_CRF_Model(word_embedding,word2id,tag2id,config,use_CRF=False)
+    model.build_graph()
+    model.train(pad_all_sentence_id, pad_all_sentence_tag_id, actual_length_list)
+    print("BiLSTM model has trained over")
+    precision_score,recall_score,f1_score=model.test(pad_all_sentence_id_test, pad_all_sentence_tag_id_test, actual_length_list_test)
+    print("Finish model of BiLSTM")
+    with open(".model_results/BiLSTM_results.txt","w",encoding="utf-8") as f:
+        f.write("tag name"+"\t"+"precision_score"+"\t"+"recall_score"+"\t"+"f1_score"+"\n")
+        for tag in tag2id:
+            f.write(tag+"\t"+"  "+str(round(precision_score[tag],3))+"\t"+"  "+str(round(recall_score[tag],3))+"\t"+"  "+str(round(f1_score,3))+"\n")
 
